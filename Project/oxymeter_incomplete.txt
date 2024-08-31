@@ -1,0 +1,140 @@
+/*
+ * u8g2_demo.c
+ *
+ * Created: 2/21/2024 8:02:58 PM
+ * Author : Afzal Hossan
+ */ 
+
+#include <avr/io.h>
+#include <util/delay.h>
+#include <u8g2.h>
+#include <u8x8_avr.h>
+#include "i2c.h"
+#include "MAX30102.h"
+
+#define SSD1306_ADDR  0x78
+#define MAX30102_ADDR 0x57
+
+u8g2_t u8g2;
+
+// images from https://lopaka.app/
+static const unsigned char image_Lock_7x8_bits[] U8X8_PROGMEM = {0x1c,0x22,0x22,0x7f,0x7f,0x77,0x7f,0x3e};
+static const unsigned char image_Bluetooth_Idle_5x8_bits[] U8X8_PROGMEM = {0x04,0x0d,0x16,0x0c,0x0c,0x16,0x0d,0x04};
+static const unsigned char image_Volup_8x6_bits[] U8X8_PROGMEM = {0x48,0x8c,0xaf,0xaf,0x8c,0x48};
+static const unsigned char image_Alert_9x8_bits[] U8X8_PROGMEM = {0x10,0x00,0x38,0x00,0x28,0x00,0x6c,0x00,0x6c,0x00,0xfe,0x00,0xee,0x00,0xff,0x01};
+
+int progress = 0; // progress of the progress bar
+char buffer[32]; // helper buffer to construct a string to be displayed
+
+void ADC_init(){
+	ADMUX = 0x00;
+	ADMUX = (1 << REFS0) | (1 << ADLAR);
+	ADCSRA = 0x00;
+	ADCSRA = (1 << ADEN) | (1 << ADPS2);
+}
+
+uint8_t ADC_read() {
+	ADCSRA |= (1 << ADSC);
+	while (ADCSRA & (1 << ADSC));
+	return (ADCH >> 3);
+}
+
+void initialize(){
+	DDRB = 0x00;
+	ADC_init();
+}
+
+int main (void)
+{
+	initialize();
+
+	u8g2_Setup_ssd1306_i2c_128x64_noname_f(&u8g2, U8G2_R0, u8x8_byte_avr_hw_i2c, u8x8_avr_delay);
+	u8g2_SetI2CAddress(&u8g2, SSD1306_ADDR);
+	u8g2_InitDisplay(&u8g2);
+	u8g2_SetPowerSave(&u8g2, 0);
+	MAX30102_setup();
+	
+	while(1){
+// 		if(!(PORTB & 0x01) && !(PORTB & 0x02)){
+// 			progress = ADC_read() >> 2;
+// 		}
+		u8g2_ClearBuffer(&u8g2);
+				u8g2_SetFont(&u8g2, u8g2_font_smart_patrol_nbp_tr);
+				u8g2_SetFontRefHeightText(&u8g2);
+				u8g2_SetFontPosTop(&u8g2);
+				u8g2_DrawStr(&u8g2, 2, 2, "Hello World");
+				
+		uint8_t sample_count = MAX30102_available_sample_count();
+		if(sample_count > 0){
+			for(uint8_t i = 0; i < sample_count; i++){
+				MAX30102_sample sample = MAX30102_readSample();
+				u8g2_SetBitmapMode(&u8g2, 1);
+				u8g2_SetFont(&u8g2, u8g2_font_helvB08_tr);
+				u8g2_ClearBuffer(&u8g2);
+				sprintf(buffer, "Red: %ll%%", sample.red);
+				_delay_ms(1000);
+				u8g2_ClearBuffer(&u8g2);
+				sprintf(buffer, "IR: %ll%%", sample.ir);
+				_delay_ms(1000);
+			}			
+		}
+		
+// 		u8g2_ClearBuffer(&u8g2);
+// 		u8g2_SetBitmapMode(&u8g2, 1);
+// 		u8g2_DrawFrame(&u8g2, 12, 21, 104, 20);
+// 		u8g2_DrawBox(&u8g2, 14, 23, progress, 16); // draw the progress bar fill
+// 		u8g2_SetFont(&u8g2, u8g2_font_helvB08_tr);
+// 		sprintf(buffer, "Progress: %d%%", progress); // construct a string with the progress variable
+// 		u8g2_DrawStr(&u8g2, 33, 53, buffer); // display the string
+// 		u8g2_SetFont(&u8g2, u8g2_font_haxrcorp4089_tr);
+// 		u8g2_DrawStr(&u8g2, 0, 7, "Progress Bar Screen");
+// 		u8g2_DrawLine(&u8g2, 0, 9, 127, 9);
+// 		u8g2_DrawXBMP(&u8g2, 100, 0, 7, 8, image_Lock_7x8_bits);
+// 		u8g2_DrawXBMP(&u8g2, 111, 0, 5, 8, image_Bluetooth_Idle_5x8_bits);
+// 		u8g2_DrawXBMP(&u8g2, 120, 1, 8, 6, image_Volup_8x6_bits);
+// 		u8g2_DrawXBMP(&u8g2, 22, 45, 9, 8, image_Alert_9x8_bits);
+// 		u8g2_SendBuffer(&u8g2);
+//	}
+// 	u8g2_Setup_ssd1306_i2c_128x64_noname_f(&u8g2, U8G2_R0, u8x8_byte_sw_i2c, u8x8_gpio_and_delay); // Change parameters as per your display
+// 	u8x8_SetI2CAddress(&u8g2.u8x8, 0x3C << 1); // Change the address if needed
+// 	u8g2_InitDisplay(&u8g2);
+// 	u8g2_SetPowerSave(&u8g2, 0);
+	/*
+	// Main loop
+	
+	while (1) {
+		if((PORTB & 0x01) || (PORTB & 0x02)) continue;
+		
+		// Plot graph
+		uint16_t last_reading = 0;
+		
+		// Clear display
+		u8g2_ClearBuffer(&u8g2);
+		
+		for (int x = 0; x < 128; x+=4) {  // Adjust the loop range as needed for your display width
+			// Read analog data from ADC0
+			uint16_t sensor_value = ADC_read();
+			
+			// Map the sensor value to display height (assuming display height is 64 pixels)
+			uint8_t y = sensor_value; // Adjust 1023 to your maximum ADC value
+			
+			// Draw line from last reading to current reading
+			if (x > 0) {
+				u8g2_DrawLine(&u8g2, x - 4, 47 - last_reading, x, 47 - y);
+			}
+			
+			// Store current reading for next iteration
+			last_reading = y;
+			// Send buffer to display
+		}
+		u8g2_SendBuffer(&u8g2);
+		
+		// Delay for a while before next reading
+		//_delay_ms(1);
+		*/
+	}
+	return 0;
+}
+
+
+
